@@ -1,0 +1,96 @@
+#QAQC script V2 June 20 2024
+
+#1. Set up work environment and install/load required packages
+
+#1.1 It's always good to check where your working directory is, and then
+# set it to the one you need. *If you need to work on data exports from another 
+# date, change the date folder (here it's 2024-05-06) and leave everything else 
+# as is 
+
+getwd()
+setwd("G:/Aquatic Invasive Species/Data Management/Data Exports/2024-05-06/QAQC")
+
+#this location is important! all output files will also be stored here after QAQC. 
+#If R gives you the following error: Error in setwd("G:/Aquatic Invasive Species/Data Management/Data Exports/2024-05-06/Raw") : 
+#cannot change working directory, to solve do the following
+#1. check that you are logged in Entrust and connected to the VPN
+#2. Open your file explorer and click on the G: drive making sure the red "x" 
+##disappears and you're connected. Sometimes you're not connected to the drive 
+##despite being connected to the VPN and clicking on it solves this.
+
+#1.2 Install/load packages
+
+install.packages("ggplot2")
+install.packages("tidyverse")
+install.packages("reshape2")
+install.packages("ggtext")
+install.packages("purrr")
+
+library(ggplot2)
+library(tidyverse)
+library(dplyr)
+library(reshape2)
+library(ggtext)
+library(purrr)
+
+#2. Import data 
+# 
+# If there is field unit specific data to import, "uncomment the section" specific 
+# to field units. To "uncomment" press ctrl+shift+c
+
+#2.1 Import data. Rememberto change the YYYY-DD-MM folder name to match your attribute table export date.
+
+cc <- read.csv("G:/Aquatic Invasive Species/Data Management/Data Exports/2024-05-06/Raw/cc.csv")
+em <- read.csv("G:/Aquatic Invasive Species/Data Management/Data Exports/2024-05-06/Raw/em.csv")
+emrel <- read.csv("G:/Aquatic Invasive Species/Data Management/Data Exports/2024-05-06/Raw/emrel.csv")
+sc <- read.csv("G:/Aquatic Invasive Species/Data Management/Data Exports/2024-05-06/Raw/sc.csv")
+screl <- read.csv("G:/Aquatic Invasive Species/Data Management/Data Exports/2024-05-06/Raw/screl.csv")
+wis <- read.csv("G:/Aquatic Invasive Species/Data Management/Data Exports/2024-05-06/Raw/wis.csv")
+wisrel <- read.csv("G:/Aquatic Invasive Species/Data Management/Data Exports/2024-05-06/Raw/wisrel.csv")
+
+#2.5 Rename variables that were inconsistent from one survey to another in Survey123
+
+#2.5.1 Check the column names in all the data.frames
+
+colnames(cc) #has Surveyors column
+colnames(em) #has Surveyors column
+colnames(emrel) #no Surveyors column
+colnames(sc) #Surveyors is called Data.Entered.By
+colnames(screl) #no Surveyors column
+colnames(wis) #Surveyors is called Inspection.Completed.By *TO BE FIXED IN S123*
+colnames(wisrel) #no Surveyors column
+
+#2.5.2 Rename columns as needed here
+
+sc <- sc %>%
+  rename(Surveyors = Data.Entered.By)
+
+wis <- wis %>%
+  rename(Surveyors = Inspection.Completed.By)
+
+#3. Merge data frames
+
+#Make a list of data frames
+dataFrames <- list(
+  list(main=wis, rel=wisrel),
+  list(main=sc, rel=screl),
+  list(main=em, rel=emrel)
+)
+
+for (pair in dataFrames) {
+  mainDf <- pair$main
+  relDf <- pair$rel
+  
+  #Merge based on GlobalID and ParentGlobalID
+  mergedDf <- merge(mainDf, relDf, by.x="GlobalID", 
+                    by.y="ParentGlobalID", all=TRUE)
+  
+  #Generate file name based on Df names
+  mainName <- deparse(substitute(pair$main))
+  ooutputFile <- paste0(mainName, "full.csv")
+  
+  # Save merged Df to csv
+  wriste.csv(mergedDf, file = outputFile, row.names=FALSE)
+  
+  cat(sprintf("Saved merged data to '%s' \n", outputFile))
+} 
