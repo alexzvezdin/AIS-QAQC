@@ -10,7 +10,7 @@
 getwd()
 setwd("G:/Aquatic Invasive Species/Data Management/Data Exports/2024-05-06/QAQC")
 
-#this location is important! all output files will also be stored here after QAQC. 
+#this location is important! all files will be written there.
 #If R gives you the following error: Error in setwd("G:/Aquatic Invasive Species/Data Management/Data Exports/2024-05-06/Raw") : 
 #cannot change working directory, to solve do the following
 #1. check that you are logged in Entrust and connected to the VPN
@@ -34,33 +34,32 @@ library(ggtext)
 library(purrr)
 
 #2. Import data 
-# 
-# If there is field unit specific data to import, "uncomment the section" specific 
-# to field units. To "uncomment" press ctrl+shift+c
 
-#2.1 Import data. Rememberto change the YYYY-DD-MM folder name to match your attribute table export date.
+#2.1 Import data. Remember to change the YYYY-DD-MM folder name to match your attribute table export date.
+#These files are NOT read directly from the working directory and their location must be specified. 
 
-cc <- read.csv("G:/Aquatic Invasive Species/Data Management/Data Exports/2024-05-06/Raw/cc.csv")
-em <- read.csv("G:/Aquatic Invasive Species/Data Management/Data Exports/2024-05-06/Raw/em.csv")
-emrel <- read.csv("G:/Aquatic Invasive Species/Data Management/Data Exports/2024-05-06/Raw/emrel.csv")
-sc <- read.csv("G:/Aquatic Invasive Species/Data Management/Data Exports/2024-05-06/Raw/sc.csv")
-screl <- read.csv("G:/Aquatic Invasive Species/Data Management/Data Exports/2024-05-06/Raw/screl.csv")
-wis <- read.csv("G:/Aquatic Invasive Species/Data Management/Data Exports/2024-05-06/Raw/wis.csv")
-wisrel <- read.csv("G:/Aquatic Invasive Species/Data Management/Data Exports/2024-05-06/Raw/wisrel.csv")
+cc <- read.csv("G:/Aquatic Invasive Species/Data Management/Data Exports/2024-05-06/cc.csv")
+em <- read.csv("G:/Aquatic Invasive Species/Data Management/Data Exports/2024-05-06/em.csv")
+emrel <- read.csv("G:/Aquatic Invasive Species/Data Management/Data Exports/2024-05-06/emrel.csv")
+sc <- read.csv("G:/Aquatic Invasive Species/Data Management/Data Exports/2024-05-06/sc.csv")
+screl <- read.csv("G:/Aquatic Invasive Species/Data Management/Data Exports/2024-05-06/screl.csv")
+wis <- read.csv("G:/Aquatic Invasive Species/Data Management/Data Exports/2024-05-06/wis.csv")
+wisrel <- read.csv("G:/Aquatic Invasive Species/Data Management/Data Exports/2024-05-06/wisrel.csv")
 
-#2.5 Rename variables that were inconsistent from one survey to another in Survey123
+#2.5 renaming variables that were inconsistent from one survey to another 
+#in Survey123
 
-#2.5.1 Check the column names in all the data.frames
+#2.5.1 check the column names in all the data.frames
 
 colnames(cc) #has Surveyors column
 colnames(em) #has Surveyors column
 colnames(emrel) #no Surveyors column
 colnames(sc) #Surveyors is called Data.Entered.By
 colnames(screl) #no Surveyors column
-colnames(wis) #Surveyors is called Inspection.Completed.By *TO BE FIXED IN S123*
+colnames(wis) #Surveyors is called Inspection.Completed.By
 colnames(wisrel) #no Surveyors column
 
-#2.5.2 Rename columns as needed here
+#2.5.2 rename columns as you need here
 
 sc <- sc %>%
   rename(Surveyors = Data.Entered.By)
@@ -68,29 +67,124 @@ sc <- sc %>%
 wis <- wis %>%
   rename(Surveyors = Inspection.Completed.By)
 
-#3. Merge data frames
+#3 Merge data frames. This step takes a long time.
 
-#Make a list of data frames
-dataFrames <- list(
-  list(main=wis, rel=wisrel),
-  list(main=sc, rel=screl),
-  list(main=em, rel=emrel)
+# 3.1 Define a list of data frame pairs and corresponding output file names
+dataPairs <- list(
+  list(wis = wis, wisRel = wisrel, outputFile = "wisFull.csv"),
+  list(sc = sc, scRel = screl, outputFile = "scFull.csv"),
+  list(em = em, emRel = emrel, outputFile = "emFull.csv"))
+
+
+#3.2 Iterate through each pair
+
+for (pair in dataPairs) {
+  # Extract data frames and output filename from the list
+  mainDf <- pair[[1]]
+  relatedDf <- pair[[2]]
+  outputFile <- pair[[3]]
+  
+  #Merge data frames
+  mergedDf <- merge(mainDf, relatedDf, by.x = "GlobalID", by.y = "ParentGlobalID", all.x = TRUE)
+  
+  # Save merged data frame to CSV
+  write.csv(mergedDf, file = outputFile, row.names = FALSE)
+}
+  
+#3.3 Make objects with the newly merged dataframes for future manipulations 
+
+emFull <- read.csv("emFull.csv")
+scFull <- read.csv("scFull.csv")
+wisFull <- read.csv("wisFull.csv")
+
+
+#4. Add NA to empty cells
+
+# S123 user specified missing values will appear as "N/A" and R added missing values will appear as "NA" in the saved documents
+
+# Difficulty in replacing empty cells with NA!!
+# The error suggests that there is a type mismatch between the values in your columns and the NA that you're trying to replace them with. 
+# It's likely that some columns in your ccClean data frame have integer or
+# numeric values, while others have character values. Since NA is typically 
+# interpreted as logical variable and R is finnicky when dealing with variables
+# of different types, you should ensure that the columns are of the same type before applying the replacement.
+
+# Add NA by first converting all columns to character type, 
+# & then replacing empty values with NA, and then converting them back to their original type
+
+#4.1 Make a list of data frames
+
+DataList <- list(
+  wisFull = wisFull,
+  emFull = emFull,
+  scFull = scFull,
+  cc = cc
 )
 
-for (pair in dataFrames) {
-  mainDf <- pair$main
-  relDf <- pair$rel
+# Function to replace empty cells with "NA"
+replaceWithNA <- function(df) {
+  for (col in names(df)) {
+    df[[col]][df[[col]] == ""] <- NA
+  }
+  return(df)
+}
+
+# Loop through each data frame, replace empty cells, and save to CSV. This step takes a long time.
+for (dfName in names(DataList)) {
+  df <- DataList[[dfName]]
   
-  #Merge based on GlobalID and ParentGlobalID
-  mergedDf <- merge(mainDf, relDf, by.x="GlobalID", 
-                    by.y="ParentGlobalID", all=TRUE)
+  # Replace empty cells with NA
+  df <- replaceWithNA(df)
   
-  #Generate file name based on Df names
-  mainName <- deparse(substitute(pair$main))
-  ooutputFile <- paste0(mainName, "full.csv")
+  # Generate output file name
+  outputFile <- paste0(dfName, "NA.csv")
   
-  # Save merged Df to csv
-  wriste.csv(mergedDf, file = outputFile, row.names=FALSE)
+  # Save data frame to CSV
+  write.csv(df, file = outputFile, row.names = FALSE)
   
-  cat(sprintf("Saved merged data to '%s' \n", outputFile))
-} 
+  cat(sprintf("Saved '%s' to '%s'\n", dfName, outputFile))
+}
+
+
+#5. Logic Tests
+
+#5.1 Inspection survey
+
+#check if "N/A_Not_Launching_in_Park" column "Where do you plan to use the watercraft / gear next?"
+#that "Permit Issued" "No" and there's no location for next launch
+
+head(wisFull)
+
+# Check for rows where the conditions are met
+result <- wisFull %>%
+  filter(`Where.do.you.plan.to.use.the.watercraft...gear.next.` == "N/A_Not_Launching_in_Park" |
+           `Where.do.you.plan.to.use.the.watercraft...gear.next.` == "N/A" &
+           `Permit.Issued` == "Yes") %>%
+  select(Where.do.you.plan.to.use.the.watercraft...gear.next.,Permit.Issued, everything())
+
+# View the result
+View(result)
+
+#5.2 If any risk factors have been selected, make sure there’s a follow up action 
+# selected (e.g., hot wash, targeted clean, etc.)
+
+unique <- unique(wisFull$Risk.Factors)
+unique
+
+head(wisFull)
+
+unique <-unique(wisFull$What.follow.up.actions.were.taken.)
+unique
+
+# Filter rows where "Risk.Factors" is not "None" and "What.follow.up.actions.were.taken." is "" or "None"
+result <- wisFull %>%
+  filter(Risk.Factors != "None" &
+           What.follow.up.actions.were.taken. %in% c("", "None")) %>%
+  select(Risk.Factors, What.follow.up.actions.were.taken., everything())
+
+# View the result
+View(result)
+
+
+
+
